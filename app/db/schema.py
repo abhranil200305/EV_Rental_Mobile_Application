@@ -82,6 +82,40 @@ class UserStatus(str, enum.Enum):
     DELETED = "DELETED"
 
 
+class UserSuspendedReason(str, enum.Enum):
+    KYC_PENDING_REVIEW = "KYC_PENDING_REVIEW"
+    KYC_NEEDS_REUPLOAD = "KYC_NEEDS_REUPLOAD"
+    KYC_EXPIRED = "KYC_EXPIRED"
+    PAYMENT_DUE = "PAYMENT_DUE"
+    PAYMENT_DISPUTE = "PAYMENT_DISPUTE"
+    DAMAGE_UNDER_REVIEW = "DAMAGE_UNDER_REVIEW"
+    DAMAGE_PENDING_RECOVERY = "DAMAGE_PENDING_RECOVERY"
+    RISK_REVIEW = "RISK_REVIEW"
+    SAFETY_REVIEW = "SAFETY_REVIEW"
+    GEOFENCE_VIOLATION_REVIEW = "GEOFENCE_VIOLATION_REVIEW"
+    SUPPORT_ESCALATION_HOLD = "SUPPORT_ESCALATION_HOLD"
+    ADMIN_TEMP_BLOCK = "ADMIN_TEMP_BLOCK"
+    LEGAL_HOLD = "LEGAL_HOLD"
+    OTHER = "OTHER"
+
+
+class UserBlacklistedReason(str, enum.Enum):
+    FRAUD_CONFIRMED = "FRAUD_CONFIRMED"
+    MULTIPLE_ACCOUNT_ABUSE = "MULTIPLE_ACCOUNT_ABUSE"
+    PAYMENT_ABUSE = "PAYMENT_ABUSE"
+    CHARGEBACK_ABUSE = "CHARGEBACK_ABUSE"
+    SERIOUS_DAMAGE_LIABILITY = "SERIOUS_DAMAGE_LIABILITY"
+    VEHICLE_THEFT_RISK = "VEHICLE_THEFT_RISK"
+    DOCUMENT_FORGERY = "DOCUMENT_FORGERY"
+    IDENTITY_MISMATCH_CONFIRMED = "IDENTITY_MISMATCH_CONFIRMED"
+    REPEATED_SAFETY_VIOLATIONS = "REPEATED_SAFETY_VIOLATIONS"
+    REPEATED_GEOFENCE_ABUSE = "REPEATED_GEOFENCE_ABUSE"
+    REPEATED_POLICY_VIOLATION = "REPEATED_POLICY_VIOLATION"
+    LEGAL_OR_POLICE_DIRECTION = "LEGAL_OR_POLICE_DIRECTION"
+    ADMIN_PERMANENT_BLOCK = "ADMIN_PERMANENT_BLOCK"
+    OTHER = "OTHER"
+
+
 class SessionStatus(str, enum.Enum):
     ACTIVE = "ACTIVE"
     REVOKED = "REVOKED"
@@ -747,8 +781,15 @@ class User(UUIDPKMixin, TimestampMixin, Base):
     country_code: Mapped[str] = mapped_column(String(2), nullable=False, server_default="IN")
     is_phone_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.false())
     is_email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.false())
-    suspended_reason: Mapped[Optional[str]] = mapped_column(Text)
-    blacklisted_reason: Mapped[Optional[str]] = mapped_column(Text)
+    suspended_reason: Mapped[Optional[UserSuspendedReason]] = mapped_column(
+    PGEnum(UserSuspendedReason, name="user_suspended_reason_enum")
+    )
+    suspended_reason_note: Mapped[Optional[str]] = mapped_column(Text)
+
+    blacklisted_reason: Mapped[Optional[UserBlacklistedReason]] = mapped_column(
+        PGEnum(UserBlacklistedReason, name="user_blacklisted_reason_enum")
+    )
+    blacklisted_reason_note: Mapped[Optional[str]] = mapped_column(Text)
     risk_hold_bool: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.false())
     risk_score_numeric: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 2))
     last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
