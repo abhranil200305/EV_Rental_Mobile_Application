@@ -115,6 +115,21 @@ class UserBlacklistedReason(str, enum.Enum):
     ADMIN_PERMANENT_BLOCK = "ADMIN_PERMANENT_BLOCK"
     OTHER = "OTHER"
 
+class ConsentSource(str, enum.Enum):
+    SIGNUP_FLOW = "SIGNUP_FLOW"
+    LOGIN_FLOW = "LOGIN_FLOW"
+    PROFILE_SETTINGS = "PROFILE_SETTINGS"
+    BOOKING_FLOW = "BOOKING_FLOW"
+    KYC_FLOW = "KYC_FLOW"
+    CHECKOUT_FLOW = "CHECKOUT_FLOW"
+    APP_POPUP = "APP_POPUP"
+    WEB_PORTAL = "WEB_PORTAL"
+    ADMIN_PANEL = "ADMIN_PANEL"
+    CUSTOMER_SUPPORT = "CUSTOMER_SUPPORT"
+    SYSTEM_MIGRATION = "SYSTEM_MIGRATION"
+    BACKFILL = "BACKFILL"
+    API = "API"
+    UNKNOWN = "UNKNOWN"
 
 class SessionStatus(str, enum.Enum):
     ACTIVE = "ACTIVE"
@@ -896,7 +911,9 @@ class UserConsent(UUIDPKMixin, TimestampMixin, Base):
     version: Mapped[str] = mapped_column(String(50), nullable=False)
     granted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     withdrawn_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-    source: Mapped[Optional[str]] = mapped_column(String(50))
+    source: Mapped[Optional[ConsentSource]] = mapped_column(
+    PGEnum(ConsentSource, name="consent_source_enum")
+    )
 
     user: Mapped["User"] = relationship(back_populates="consents")
 
