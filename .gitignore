@@ -1,6 +1,4 @@
-# -----------------------------
 # Python
-# -----------------------------
 __pycache__/
 *.py[cod]
 *$py.class
@@ -10,52 +8,12 @@ venv/
 env/
 ENV/
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-*.egg-info/
-.installed.cfg
-*.egg
+# Environment variables
+.env
+.env.*
 
 # Logs
 *.log
-
-# Unit test / coverage
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-.hypothesis/
-
-# PyInstaller
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# Environment variables (IMPORTANT)
-.env
-.env.*
 
 # VS Code
 .vscode/
