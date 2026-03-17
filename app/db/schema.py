@@ -1019,6 +1019,7 @@ class ReturnZone(UUIDPKMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     zone_type: Mapped[ZoneType] = mapped_column(PGEnum(ZoneType, name="zone_type_enum"), nullable=False)
     polygon_geojson: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    buffer_radius_m: Mapped[int] = mapped_column(Integer, default=0)
     rules_json: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.true())
     max_vehicle_capacity: Mapped[Optional[int]] = mapped_column(Integer)
