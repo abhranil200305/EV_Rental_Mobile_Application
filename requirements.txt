@@ -36,3 +36,4 @@ colorama==0.4.6
 alembic==1.13.2
 
 celery==5.4.0
+PyJWT==2.9.0

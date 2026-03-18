@@ -37,6 +37,8 @@ app = FastAPI(title="EV Rental API 🚗")
 from app.controllers.auth import signup
 app.include_router(signup.router, prefix="/auth", tags=["Auth"])
 
+from app.controllers.auth import signup, login
+app.include_router(login.router, prefix="/auth", tags=["Auth"])
 # -----------------------------
 # Singleton flags
 # -----------------------------
