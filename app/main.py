@@ -34,11 +34,15 @@ logging.getLogger("sqlalchemy.pool").setLevel(logging.WARNING)
 # FastAPI instance
 # -----------------------------
 app = FastAPI(title="EV Rental API 🚗")
+################-----Routers------###############
 from app.controllers.auth import signup
 app.include_router(signup.router, prefix="/auth", tags=["Auth"])
 
 from app.controllers.auth import signup, login
 app.include_router(login.router, prefix="/auth", tags=["Auth"])
+
+from app.controllers.auth import forgot_password
+app.include_router(forgot_password.router)
 # -----------------------------
 # Singleton flags
 # -----------------------------
