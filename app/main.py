@@ -1,10 +1,27 @@
 # app/main.py
 import logging
+import os
 from fastapi import FastAPI
 from sqlalchemy.exc import OperationalError
 from app.db.database import engine, Base
 import redis
 from celery import Celery
+from dotenv import load_dotenv
+
+# -----------------------------
+# Load environment variables
+# -----------------------------
+load_dotenv()
+
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+REDIS_USER = os.getenv("REDIS_USER", None)
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", None)
+REDIS_DB = int(os.getenv("REDIS_DB", 0))
+REDIS_SSL = os.getenv("REDIS_SSL", "False").lower() in ("true", "1", "yes")
+
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}")
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}")
 
 # -----------------------------
 # Reduce SQLAlchemy logging noise
@@ -18,9 +35,8 @@ logging.getLogger("sqlalchemy.pool").setLevel(logging.WARNING)
 # -----------------------------
 app = FastAPI(title="EV Rental API 🚗")
 from app.controllers.auth import signup
-
-
 app.include_router(signup.router, prefix="/auth", tags=["Auth"])
+
 # -----------------------------
 # Singleton flags
 # -----------------------------
@@ -56,7 +72,15 @@ def startup_event():
     if not redis_initialized:
         try:
             print("🟢 Connecting to Redis...")
-            redis_client = redis.Redis(host="localhost", port=6379, db=0)
+            redis_client = redis.Redis(
+                host=REDIS_HOST,
+                port=REDIS_PORT,
+                username=REDIS_USER,
+                password=REDIS_PASSWORD,
+                db=REDIS_DB,
+                ssl=REDIS_SSL,
+                decode_responses=True,
+            )
             redis_client.ping()  # test connection
             print("✅ Redis connected!")
             redis_initialized = True
@@ -69,8 +93,8 @@ def startup_event():
             print("⚡ Initializing Celery...")
             celery_app = Celery(
                 "ev_rental_tasks",
-                broker="redis://localhost:6379/0",
-                backend="redis://localhost:6379/0"
+                broker=CELERY_BROKER_URL,
+                backend=CELERY_RESULT_BACKEND
             )
             print("✅ Celery initialized!")
             celery_initialized = True

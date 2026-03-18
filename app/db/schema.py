@@ -765,7 +765,7 @@ class AdminActionType(str, enum.Enum):
 class User(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "users"
 
-    phone_e164: Mapped[str] = mapped_column(String(20), nullable=False, unique=True)
+    phone_e164: Mapped[str] = mapped_column(String(20), nullable=True, unique=True)
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, unique=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     user_type: Mapped[UserType] = mapped_column(PGEnum(UserType, name="user_type_enum"), nullable=False)
@@ -894,7 +894,7 @@ class OtpSession(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "otp_sessions"
 
     phone_e164: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    email: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     purpose: Mapped[OtpPurpose] = mapped_column(PGEnum(OtpPurpose, name="otp_purpose_enum"), nullable=False)
     otp_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[OtpStatus] = mapped_column(
