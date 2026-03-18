@@ -797,7 +797,7 @@ class User(UUIDPKMixin, TimestampMixin, Base):
     is_phone_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.false())
     is_email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.false())
     suspended_reason: Mapped[Optional[UserSuspendedReason]] = mapped_column(
-    PGEnum(UserSuspendedReason, name="user_suspended_reason_enum")
+        PGEnum(UserSuspendedReason, name="user_suspended_reason_enum")
     )
     suspended_reason_note: Mapped[Optional[str]] = mapped_column(Text)
 
@@ -813,14 +813,26 @@ class User(UUIDPKMixin, TimestampMixin, Base):
     devices: Mapped[list["UserDevice"]] = relationship(back_populates="user")
     sessions: Mapped[list["Session"]] = relationship(back_populates="user")
     consents: Mapped[list["UserConsent"]] = relationship(back_populates="user")
-    kyc_cases: Mapped[list["KycCase"]] = relationship(back_populates="user")
+
+    kyc_cases: Mapped[list["KycCase"]] = relationship(
+        back_populates="user",
+        foreign_keys="KycCase.user_id",
+    )
+    reviewed_kyc_cases: Mapped[list["KycCase"]] = relationship(
+        back_populates="reviewer",
+        foreign_keys="KycCase.reviewer_id",
+    )
+
     quotes: Mapped[list["Quote"]] = relationship(back_populates="user")
     bookings: Mapped[list["Booking"]] = relationship(back_populates="user")
     trips: Mapped[list["Trip"]] = relationship(back_populates="user")
     wallet_account: Mapped[Optional["WalletAccount"]] = relationship(back_populates="user", uselist=False)
     subscriptions: Mapped[list["UserSubscription"]] = relationship(back_populates="user")
     promo_redemptions: Mapped[list["PromotionRedemption"]] = relationship(back_populates="user")
-    support_tickets: Mapped[list["SupportTicket"]] = relationship(back_populates="user", foreign_keys="SupportTicket.user_id")
+    support_tickets: Mapped[list["SupportTicket"]] = relationship(
+        back_populates="user",
+        foreign_keys="SupportTicket.user_id",
+    )
     risk_profile: Mapped[Optional["RiskProfile"]] = relationship(back_populates="user", uselist=False)
     safety_profile: Mapped[Optional["UserSafetyProfile"]] = relationship(back_populates="user", uselist=False)
 
@@ -956,11 +968,18 @@ class KycCase(UUIDPKMixin, TimestampMixin, Base):
         PGEnum(KycRejectReasonCode, name="kyc_reject_reason_code_enum")
     )
     reject_reason_text: Mapped[Optional[str]] = mapped_column(Text)
-    source: Mapped[Optional[str]] = mapped_column(String(50))  # manual_upload / digilocker / hybrid
+    source: Mapped[Optional[str]] = mapped_column(String(50))
     extracted_summary_json: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
     risk_flags_json: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
 
-    user: Mapped["User"] = relationship(back_populates="kyc_cases", foreign_keys=[user_id])
+    user: Mapped["User"] = relationship(
+        back_populates="kyc_cases",
+        foreign_keys=[user_id],
+    )
+    reviewer: Mapped[Optional["User"]] = relationship(
+        back_populates="reviewed_kyc_cases",
+        foreign_keys=[reviewer_id],
+    )
     documents: Mapped[list["KycDocument"]] = relationship(back_populates="kyc_case", cascade="all, delete-orphan")
     reviews: Mapped[list["KycReview"]] = relationship(back_populates="kyc_case", cascade="all, delete-orphan")
 
