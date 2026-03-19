@@ -1,9 +1,9 @@
 # app/controllers/auth/signup.py
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db.database import get_db
-from app.db import schema
-from app.db.schema import OtpSession, OtpPurpose, OtpStatus, UserType, UserStatus, KycStatus, KycCase
+from app.db.schema import OtpSession, OtpPurpose, OtpStatus, UserType, UserStatus, KycStatus, KycCase, User
 from pydantic import BaseModel, EmailStr
 from datetime import datetime, timedelta, timezone
 import random
@@ -53,10 +53,17 @@ def get_identifier(data: SignupRequest) -> str:
 # ---------------------------
 def send_email_otp(to_email: str, otp: str):
     """Send OTP via SMTP using environment variables"""
-    smtp_host = os.getenv("SMTP_HOST")           # e.g., smtp.hostinger.com
-    smtp_port = int(os.getenv("SMTP_PORT", 465)) # SSL port
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = int(os.getenv("SMTP_PORT", 465))
     smtp_user = os.getenv("HOSTINGER_EMAIL")
     smtp_password = os.getenv("HOSTINGER_PASS")
+
+    # DEBUG: log SMTP config
+    print(f"[DEBUG] SMTP config: host={smtp_host}, port={smtp_port}, user={smtp_user}")
+
+    if not all([smtp_host, smtp_user, smtp_password]):
+        print("[WARN] SMTP config missing; skipping email send")
+        return
 
     msg = EmailMessage()
     msg.set_content(f"Your signup OTP is: {otp}\nIt is valid for 5 minutes.")
@@ -68,10 +75,10 @@ def send_email_otp(to_email: str, otp: str):
         with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
             server.login(smtp_user, smtp_password)
             server.send_message(msg)
-        print(f"[INFO] OTP sent to {to_email}")
+        print(f"[INFO] OTP sent via email to {to_email}")
     except Exception as e:
         print(f"[ERROR] Failed to send OTP to {to_email}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to send OTP email.")
+        # In dev, just log; do not raise exception
 
 
 # ---------------------------
@@ -79,28 +86,28 @@ def send_email_otp(to_email: str, otp: str):
 # ---------------------------
 @router.post("/signup")
 def signup(data: SignupRequest, db: Session = Depends(get_db)):
-
     identifier = get_identifier(data)
     now = datetime.now(timezone.utc)
 
     # ---------------------------
-    # STEP 1: SEND OTP
+    # STEP 1: ISSUE OTP
     # ---------------------------
     if not data.otp and not data.password:
-        query = db.query(schema.User)
+        # Check if user already exists
+        query = db.query(User)
         if data.email:
-            query = query.filter(schema.User.email == data.email)
+            query = query.filter(User.email == data.email)
         elif data.phone:
-            query = query.filter(schema.User.phone_e164 == data.phone)
-
+            query = query.filter(User.phone_e164 == data.phone)
         if query.first():
             raise HTTPException(status_code=400, detail="User already exists")
 
         otp = generate_otp()
+
         otp_entry = OtpSession(
             id=str(uuid.uuid4()),
-            phone_e164=data.phone,
-            email=data.email,
+            phone_e164=data.phone or "",
+            email=data.email or "",
             purpose=OtpPurpose.SIGNUP,
             otp_hash=hash_value(otp),
             status=OtpStatus.ISSUED,
@@ -110,32 +117,30 @@ def signup(data: SignupRequest, db: Session = Depends(get_db)):
         db.add(otp_entry)
         db.commit()
 
-        # Send OTP
+        # DEBUG: always print OTP for dev testing
         if data.email:
+            print(f"[DEBUG] OTP for email {data.email}: {otp}")
             send_email_otp(data.email, otp)
         elif data.phone:
-            # TODO: Integrate SMS provider
-            print(f"[DEV] OTP for {data.phone}: {otp}")
+            print(f"[DEBUG] OTP for phone {data.phone}: {otp}")
+            # TODO: integrate SMS provider
 
-        return {"message": "OTP sent"}
+        return {"message": "OTP issued successfully"}
 
     # ---------------------------
     # STEP 2: VERIFY OTP
     # ---------------------------
     if data.otp and not data.password:
-        otp_entry = None
-        if data.phone:
-            otp_entry = db.query(OtpSession).filter(
-                OtpSession.phone_e164 == data.phone,
-                OtpSession.purpose == OtpPurpose.SIGNUP,
-                OtpSession.status == OtpStatus.ISSUED
-            ).order_by(OtpSession.created_at.desc()).first()
-        elif data.email:
-            otp_entry = db.query(OtpSession).filter(
-                OtpSession.email == data.email,
-                OtpSession.purpose == OtpPurpose.SIGNUP,
-                OtpSession.status == OtpStatus.ISSUED
-            ).order_by(OtpSession.created_at.desc()).first()
+        otp_query = db.query(OtpSession).filter(
+            OtpSession.purpose == OtpPurpose.SIGNUP,
+            OtpSession.status == OtpStatus.ISSUED
+        )
+        if data.email:
+            otp_entry = otp_query.filter(OtpSession.email == data.email).order_by(OtpSession.created_at.desc()).first()
+        elif data.phone:
+            otp_entry = otp_query.filter(OtpSession.phone_e164 == data.phone).order_by(OtpSession.created_at.desc()).first()
+        else:
+            otp_entry = None
 
         if not otp_entry:
             raise HTTPException(status_code=400, detail="OTP not found")
@@ -149,39 +154,35 @@ def signup(data: SignupRequest, db: Session = Depends(get_db)):
         return {"message": "OTP verified"}
 
     # ---------------------------
-    # STEP 3: SET PASSWORD AND CREATE DRIVER
+    # STEP 3: CREATE DRIVER USER
     # ---------------------------
     if data.otp and data.password:
-        otp_entry = None
-        if data.phone:
-            otp_entry = db.query(OtpSession).filter(
-                OtpSession.phone_e164 == data.phone,
-                OtpSession.purpose == OtpPurpose.SIGNUP,
-                OtpSession.status == OtpStatus.VERIFIED
-            ).order_by(OtpSession.created_at.desc()).first()
-        elif data.email:
-            otp_entry = db.query(OtpSession).filter(
-                OtpSession.email == data.email,
-                OtpSession.purpose == OtpPurpose.SIGNUP,
-                OtpSession.status == OtpStatus.VERIFIED
-            ).order_by(OtpSession.created_at.desc()).first()
+        otp_query = db.query(OtpSession).filter(
+            OtpSession.purpose == OtpPurpose.SIGNUP,
+            OtpSession.status == OtpStatus.VERIFIED
+        )
+        if data.email:
+            otp_entry = otp_query.filter(OtpSession.email == data.email).order_by(OtpSession.created_at.desc()).first()
+        elif data.phone:
+            otp_entry = otp_query.filter(OtpSession.phone_e164 == data.phone).order_by(OtpSession.created_at.desc()).first()
+        else:
+            otp_entry = None
 
         if not otp_entry:
             raise HTTPException(status_code=400, detail="OTP not verified")
 
-        # Insert new driver user
+        # Create user
         user_data = {
             "id": str(uuid.uuid4()),
             "email": data.email,
             "phone_e164": data.phone,
             "password_hash": hash_value(data.password),
-            "user_type": UserType.DRIVER,           # Correct user type
-            "status": UserStatus.PENDING,           # Default status
+            "user_type": UserType.DRIVER,
+            "status": UserStatus.PENDING,
             "kyc_status": KycStatus.KYC_NOT_STARTED,
             "created_at": now
         }
-
-        user = schema.User(**user_data)
+        user = User(**user_data)
         db.add(user)
         db.commit()
 
@@ -199,6 +200,6 @@ def signup(data: SignupRequest, db: Session = Depends(get_db)):
         return {"message": "Driver signup successful", "user_id": user.id}
 
     # ---------------------------
-    # INVALID CASE
+    # INVALID FLOW
     # ---------------------------
     raise HTTPException(status_code=400, detail="Invalid request flow")

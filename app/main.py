@@ -51,6 +51,9 @@ app.include_router(user_crud.router)
 from app.controllers.auth import change_password
 app.include_router(change_password.router)
 
+from app.controllers.Crud.read_users import router as read_users_router
+app.include_router(read_users_router)
+
 # -----------------------------
 # Singleton flags
 # -----------------------------
