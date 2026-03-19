@@ -12,7 +12,7 @@ import uuid
 
 router = APIRouter()
 
-JWT_SECRET = os.getenv("JWT_SECRET")
+JWT_SECRET = os.getenv("JWT_SECRET", "supersecretkey")  # fallback for dev
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_MINUTES = 60  # Token valid for 1 hour
 
@@ -38,12 +38,15 @@ class LoginResponse(BaseModel):
 def hash_value(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
 
-def create_jwt_token(user_id) -> str:
-    if isinstance(user_id, uuid.UUID):
-        user_id = str(user_id)
+def create_jwt_token(user: User) -> str:
+    """
+    Create JWT token including user_type
+    """
+    user_id = str(user.id) if isinstance(user.id, uuid.UUID) else user.id
     now = datetime.now(timezone.utc)
     payload = {
         "sub": user_id,
+        "user_type": user.user_type.value,  # <-- include user_type
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=JWT_EXPIRE_MINUTES)).timestamp())
     }
@@ -77,11 +80,11 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
     if data.password:
         if user.password_hash != hash_value(data.password):
             raise HTTPException(status_code=400, detail="Invalid password")
-        token = create_jwt_token(user.id)
+        token = create_jwt_token(user)  # <-- pass full user object
         return LoginResponse(message="Login successful", token=token)
 
     # ---------------------------
-    # OTP LOGIN / SEND OTP
+    # OTP LOGIN / VERIFY OTP
     # ---------------------------
     if data.otp:
         # Verify OTP
@@ -107,31 +110,32 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
         otp_entry.status = OtpStatus.VERIFIED
         db.commit()
 
-        token = create_jwt_token(user.id)
+        token = create_jwt_token(user)  # <-- pass full user object
         return LoginResponse(message="Login successful", token=token)
 
-    else:
-        # No OTP provided → send OTP
-        otp = str(uuid.uuid4().int)[:6]
-        otp_entry = OtpSession(
-            id=str(uuid.uuid4()),
-            phone_e164=data.phone,
-            email=data.email,
-            purpose=OtpPurpose.LOGIN,
-            otp_hash=hash_value(otp),
-            status=OtpStatus.ISSUED,
-            created_at=now,
-            expires_at=now + timedelta(minutes=5)
-        )
-        db.add(otp_entry)
-        db.commit()
+    # ---------------------------
+    # NO OTP PROVIDED → SEND OTP
+    # ---------------------------
+    otp = str(uuid.uuid4().int)[:6]
+    otp_entry = OtpSession(
+        id=str(uuid.uuid4()),
+        phone_e164=data.phone,
+        email=data.email,
+        purpose=OtpPurpose.LOGIN,
+        otp_hash=hash_value(otp),
+        status=OtpStatus.ISSUED,
+        created_at=now,
+        expires_at=now + timedelta(minutes=5)
+    )
+    db.add(otp_entry)
+    db.commit()
 
-        # Send OTP
-        if data.email:
-            from app.controllers.auth.signup import send_email_otp
-            send_email_otp(data.email, otp)
-        elif data.phone:
-            # TODO: Integrate SMS provider
-            print(f"[DEV] Login OTP for {data.phone}: {otp}")
+    # Send OTP
+    if data.email:
+        from app.controllers.auth.signup import send_email_otp
+        send_email_otp(data.email, otp)
+    elif data.phone:
+        # TODO: Integrate SMS provider
+        print(f"[DEV] Login OTP for {data.phone}: {otp}")
 
-        return LoginResponse(message="OTP sent. Please verify to login.", token=None)
+    return LoginResponse(message="OTP sent. Please verify to login.", token=None)
