@@ -57,6 +57,8 @@ app.include_router(read_users_router)
 from app.controllers.admin import users 
 app.include_router(users.router)
 
+from app.controllers.auth import logout
+app.include_router(logout.router)
 # -----------------------------
 # Singleton flags
 # -----------------------------
