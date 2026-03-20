@@ -60,21 +60,14 @@ def hash_value(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
 
 
-# ✅ UPDATED FUNCTION (IMPORTANT CHANGE)
 def create_jwt_token(user: User, session: UserSession) -> str:
-    """
-    Create JWT token including jti (session binding)
-    """
     user_id = str(user.id) if isinstance(user.id, uuid.UUID) else user.id
     now = datetime.now(timezone.utc)
 
     payload = {
         "sub": user_id,
         "user_type": user.user_type.value,
-
-        # 🔥 IMPORTANT ADDITION
-        "jti": str(session.id),  # or session.access_token_jti
-
+        "jti": str(session.id),
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=JWT_EXPIRE_MINUTES)).timestamp()),
     }
@@ -125,7 +118,7 @@ def create_user_session(db: Session, user: User, device: UserDevice | None) -> U
         user_id=user.id,
         device_id=device.id if device else None,
         refresh_token_hash=str(uuid.uuid4()),
-        access_token_jti=str(uuid.uuid4()),  # already exists (good)
+        access_token_jti=str(uuid.uuid4()),
         status=SessionStatus.ACTIVE,
         expires_at=expires_at,
         last_seen_at=now,
@@ -171,7 +164,10 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
         device = create_or_update_user_device(db, user, data)
         session_obj = create_user_session(db, user, device)
 
-        # ✅ FIXED LINE
+        # 🔥 ADD THIS
+        user.last_login_at = now
+        db.commit()
+
         token = create_jwt_token(user, session_obj)
 
         return LoginResponse(message="Login successful", token=token)
@@ -210,7 +206,10 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
         device = create_or_update_user_device(db, user, data)
         session_obj = create_user_session(db, user, device)
 
-        # ✅ FIXED LINE
+        # 🔥 ADD THIS
+        user.last_login_at = now
+        db.commit()
+
         token = create_jwt_token(user, session_obj)
 
         return LoginResponse(message="Login successful", token=token)
