@@ -41,6 +41,9 @@ class UserUpdateSchema(BaseModel):
     kyc_status: Optional[KycStatus] = None
     date_of_birth: Optional[date] = None
 
+    # ✅ REQUIRED FIX
+    profile_photo_file_id: Optional[UUID] = None
+
     @validator("phone_e164")
     def validate_phone_length(cls, v):
         if v is not None and not (10 <= len(v) <= 20):
@@ -65,13 +68,18 @@ class UserResponseSchema(BaseModel):
     full_name: Optional[str]
 
     city: Optional[str]
-    state: Optional[str]              # ✅ ADDED
-    address_line1: Optional[str]      # ✅ ADDED
+    state: Optional[str]
+    address_line1: Optional[str]
 
     date_of_birth: Optional[date]
 
-    is_phone_verified: Optional[bool] # ✅ ADDED
-    is_email_verified: Optional[bool] # ✅ ADDED
+    is_phone_verified: Optional[bool]
+    is_email_verified: Optional[bool]
+
+    profile_photo_file_id: Optional[UUID]
+
+    # ✅ FINAL FIX (THIS LINE IS IMPORTANT)
+    profile_photo_url: Optional[str] = None
 
     class Config:
         from_attributes = True

@@ -59,6 +59,11 @@ app.include_router(users.router)
 
 from app.controllers.auth import logout
 app.include_router(logout.router)
+
+from app.controllers.Crud.pic_uploads import router as upload_router
+
+app.include_router(upload_router)
+
 # -----------------------------
 # Singleton flags
 # -----------------------------

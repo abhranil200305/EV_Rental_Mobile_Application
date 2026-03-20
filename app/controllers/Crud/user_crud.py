@@ -1,14 +1,16 @@
 # app/controllers/Crud/user_crud.py
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import date
 
 from app.db.database import get_db
-from app.db.schema import User, UserStatus
+from app.db.schema import User, UserStatus, FileObject
 from app.schemas.user_schemas import UserUpdateSchema, UserResponseSchema
-from app.utils.auth import get_current_user  # JWT-auth dependency
+from app.utils.auth import get_current_user
 
 router = APIRouter(tags=["Users"])
+
 
 # -------------------------
 # Update My Profile (using JWT)
@@ -17,13 +19,15 @@ router = APIRouter(tags=["Users"])
 def update_my_profile(
     user_data: UserUpdateSchema,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),  # user from token
+    current_user: User = Depends(get_current_user),
 ):
     """
     Update the profile of the currently authenticated user.
-    Uses JWT token to identify the user.
     """
 
+    # -------------------------
+    # Fetch user
+    # -------------------------
     user = db.query(User).filter(
         User.id == current_user.id,
         User.status != UserStatus.DELETED
@@ -79,14 +83,35 @@ def update_my_profile(
         user.kyc_status = user_data.kyc_status
 
     # -------------------------
-    # Date of Birth validation
+    # Date of Birth validation (FIXED)
     # -------------------------
     if user_data.date_of_birth is not None:
         today = date.today()
-        age = today.year - user_data.date_of_birth.year
+        age = today.year - user_data.date_of_birth.year - (
+            (today.month, today.day) < (user_data.date_of_birth.month, user_data.date_of_birth.day)
+        )
+
         if age < 18:
             raise HTTPException(status_code=400, detail="User must be at least 18 years old")
+
         user.date_of_birth = user_data.date_of_birth
+
+    # -------------------------
+    # Profile Photo Update ✅
+    # -------------------------
+    if user_data.profile_photo_file_id is not None:
+        file_obj = db.query(FileObject).filter(
+            FileObject.id == user_data.profile_photo_file_id
+        ).first()
+
+        if not file_obj:
+            raise HTTPException(status_code=400, detail="Invalid file_id")
+
+        # Optional but recommended (security)
+        if file_obj.uploaded_by_user_id != user.id:
+            raise HTTPException(status_code=403, detail="Not your file")
+
+        user.profile_photo_file_id = file_obj.id
 
     # -------------------------
     # Update full name
