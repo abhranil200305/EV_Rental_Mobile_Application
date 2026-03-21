@@ -83,7 +83,7 @@ def update_my_profile(
         user.kyc_status = user_data.kyc_status
 
     # -------------------------
-    # Date of Birth validation (FIXED)
+    # Date of Birth validation
     # -------------------------
     if user_data.date_of_birth is not None:
         today = date.today()
@@ -97,7 +97,7 @@ def update_my_profile(
         user.date_of_birth = user_data.date_of_birth
 
     # -------------------------
-    # Profile Photo Update ✅
+    # Profile Photo Update
     # -------------------------
     if user_data.profile_photo_file_id is not None:
         file_obj = db.query(FileObject).filter(
@@ -107,7 +107,6 @@ def update_my_profile(
         if not file_obj:
             raise HTTPException(status_code=400, detail="Invalid file_id")
 
-        # Optional but recommended (security)
         if file_obj.uploaded_by_user_id != user.id:
             raise HTTPException(status_code=403, detail="Not your file")
 
@@ -128,4 +127,33 @@ def update_my_profile(
         db.rollback()
         raise HTTPException(status_code=500, detail="User update failed")
 
-    return user
+    # -------------------------
+    # Build response safely
+    # -------------------------
+    user_response = UserResponseSchema(
+        id=user.id,
+        phone_e164=user.phone_e164,
+        email=user.email,
+        user_type=user.user_type,
+        status=user.status,
+        kyc_status=user.kyc_status,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        full_name=user.full_name,
+        city=user.city,
+        state=user.state,
+        address_line1=user.address_line1,
+        date_of_birth=user.date_of_birth,
+        is_phone_verified=user.is_phone_verified,
+        is_email_verified=user.is_email_verified,
+        profile_photo_file_id=getattr(user, "profile_photo_file_id", None),
+        profile_photo_url=None
+    )
+
+    # Optional: set profile photo URL if file exists
+    if user_response.profile_photo_file_id:
+        file_obj = db.query(FileObject).filter(FileObject.id == user_response.profile_photo_file_id).first()
+        if file_obj:
+            user_response.profile_photo_url = file_obj.storage_uri
+
+    return user_response
