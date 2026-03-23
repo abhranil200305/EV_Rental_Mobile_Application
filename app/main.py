@@ -64,6 +64,10 @@ from app.controllers.Crud.pic_uploads import router as upload_router
 
 app.include_router(upload_router)
 
+from app.controllers.auth.get_user import router as get_user_router
+
+app.include_router(get_user_router)
+
 # -----------------------------
 # Singleton flags
 # -----------------------------
