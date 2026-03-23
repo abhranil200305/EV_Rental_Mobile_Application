@@ -77,7 +77,9 @@ app.include_router(user_profile_router)
 app.include_router(update_profile_router)
 app.include_router(profile_photo_router)
 
+from app.controllers.user.file_access import router as file_access_router
 
+app.include_router(file_access_router)
 # -----------------------------
 # Singleton flags
 # -----------------------------
