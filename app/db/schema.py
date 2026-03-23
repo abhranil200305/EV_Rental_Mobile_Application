@@ -894,7 +894,7 @@ class OtpSession(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "otp_sessions"
 
     phone_e164: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    email: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     purpose: Mapped[OtpPurpose] = mapped_column(PGEnum(OtpPurpose, name="otp_purpose_enum"), nullable=False)
     otp_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[OtpStatus] = mapped_column(
