@@ -185,6 +185,7 @@ class FilePurpose(str, enum.Enum):
     SUPPORT_ATTACHMENT = "SUPPORT_ATTACHMENT"
     INVOICE_PDF = "INVOICE_PDF"
     VEHICLE_DOCUMENT = "VEHICLE_DOCUMENT"
+    PROFILE_PICTURE = "PROFILE_PICTURE"
     OTHER = "OTHER"
 
 class KycStatus(str, enum.Enum):
