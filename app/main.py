@@ -68,6 +68,10 @@ from app.controllers.auth.get_user import router as get_user_router
 
 app.include_router(get_user_router)
 
+from app.controllers.user import userprofile
+
+app.include_router(userprofile.router)
+
 # -----------------------------
 # Singleton flags
 # -----------------------------

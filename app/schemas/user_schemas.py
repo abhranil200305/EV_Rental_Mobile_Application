@@ -16,6 +16,7 @@ class UserCreateSchema(BaseModel):
     email: Optional[EmailStr] = None
     password: Optional[str] = None
     user_type: UserType = UserType.DRIVER
+
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     city: Optional[str] = None
@@ -34,14 +35,21 @@ class UserCreateSchema(BaseModel):
 class UserUpdateSchema(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    full_name: Optional[str] = None
+
     email: Optional[EmailStr] = None
     phone_e164: Optional[StrictStr] = None
-    address: Optional[str] = None
+
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+
     city: Optional[str] = None
-    kyc_status: Optional[KycStatus] = None
+    state: Optional[str] = None
+    postal_code: Optional[str] = None
+
     date_of_birth: Optional[date] = None
 
-    # ✅ REQUIRED FIX
+    # 🔥 IMPORTANT FIELD
     profile_photo_file_id: Optional[UUID] = None
 
     @validator("phone_e164")
@@ -56,6 +64,7 @@ class UserUpdateSchema(BaseModel):
 # -----------------------
 class UserResponseSchema(BaseModel):
     id: UUID
+
     phone_e164: Optional[str]
     email: Optional[EmailStr]
 
@@ -67,9 +76,13 @@ class UserResponseSchema(BaseModel):
     last_name: Optional[str]
     full_name: Optional[str]
 
+    address_line1: Optional[str]
+    address_line2: Optional[str]
+
     city: Optional[str]
     state: Optional[str]
-    address_line1: Optional[str]
+    postal_code: Optional[str]
+    country_code: Optional[str]
 
     date_of_birth: Optional[date]
 
@@ -77,8 +90,6 @@ class UserResponseSchema(BaseModel):
     is_email_verified: Optional[bool]
 
     profile_photo_file_id: Optional[UUID]
-
-    # ✅ FINAL FIX (THIS LINE IS IMPORTANT)
     profile_photo_url: Optional[str] = None
 
     class Config:

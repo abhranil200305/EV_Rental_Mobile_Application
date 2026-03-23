@@ -1,13 +1,23 @@
 from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
 from app.utils.auth import get_current_user
+from app.db.database import get_db
+from app.db.schema import FileObject
 from app.schemas.user_schemas import UserResponseSchema
 
 router = APIRouter()
 
 
-@router.get("/auth/me", response_model=UserResponseSchema)
-def get_current_user_profile(current_user=Depends(get_current_user)):
-    return UserResponseSchema(
+@router.get("/auth/profile", response_model=UserResponseSchema)
+def get_current_user_profile(
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # -------------------------
+    # Build base response
+    # -------------------------
+    user_response = UserResponseSchema(
         id=current_user.id,
         phone_e164=current_user.phone_e164,
         email=current_user.email,
@@ -30,7 +40,18 @@ def get_current_user_profile(current_user=Depends(get_current_user)):
         is_email_verified=current_user.is_email_verified,
 
         profile_photo_file_id=getattr(current_user, "profile_photo_file_id", None),
-
-        # 🔥 IMPORTANT (you added this in schema)
         profile_photo_url=None
     )
+
+    # -------------------------
+    # 🔥 ADD PROFILE PHOTO URL
+    # -------------------------
+    if user_response.profile_photo_file_id:
+        file_obj = db.query(FileObject).filter(
+            FileObject.id == user_response.profile_photo_file_id
+        ).first()
+
+        if file_obj:
+            user_response.profile_photo_url = file_obj.storage_uri
+
+    return user_response
