@@ -1,5 +1,5 @@
 # app/controllers/Crud/pic_uploads.py
-
+'''
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
 import os
@@ -99,3 +99,4 @@ def upload_images(
     return {
         "files": results
     }
+'''

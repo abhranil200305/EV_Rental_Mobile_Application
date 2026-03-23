@@ -810,6 +810,12 @@ class User(UUIDPKMixin, TimestampMixin, Base):
     risk_hold_bool: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.false())
     risk_score_numeric: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 2))
     last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    profile_picture_file_object_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    ForeignKey("file_objects.id", ondelete="SET NULL"),
+    nullable=True,
+    unique=True,
+    )
+   
 
     city_ref: Mapped[Optional["City"]] = relationship(back_populates="users")
     devices: Mapped[list["UserDevice"]] = relationship(back_populates="user")
@@ -835,6 +841,11 @@ class User(UUIDPKMixin, TimestampMixin, Base):
         back_populates="user",
         foreign_keys="SupportTicket.user_id",
     )
+    profile_picture_file_object: Mapped[Optional["FileObject"]] = relationship(
+    "FileObject",
+    foreign_keys=[profile_picture_file_object_id],
+    passive_deletes=True,
+    )
     risk_profile: Mapped[Optional["RiskProfile"]] = relationship(back_populates="user", uselist=False)
     safety_profile: Mapped[Optional["UserSafetyProfile"]] = relationship(back_populates="user", uselist=False)
 
@@ -842,6 +853,7 @@ class User(UUIDPKMixin, TimestampMixin, Base):
         Index("ix_users_status", "status"),
         Index("ix_users_kyc_status", "kyc_status"),
         Index("ix_users_city_id", "city_id"),
+        Index("ix_users_profile_picture_file_object_id", "profile_picture_file_object_id"),
     )
 
 class UserDevice(UUIDPKMixin, TimestampMixin, Base):
@@ -948,7 +960,11 @@ class FileObject(UUIDPKMixin, TimestampMixin, Base):
     purpose: Mapped[FilePurpose] = mapped_column(PGEnum(FilePurpose, name="file_purpose_enum"), nullable=False)
     uploaded_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     metadata_json: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
-
+    profile_picture_for_user: Mapped[Optional["User"]] = relationship(
+    "User",
+    foreign_keys="User.profile_picture_file_object_id",
+    uselist=False,
+)
     __table_args__ = (
         Index("ix_file_objects_purpose", "purpose"),
     )

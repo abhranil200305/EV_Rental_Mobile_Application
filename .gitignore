@@ -219,3 +219,7 @@ __marimo__/
 tree.txt
 *.txt
 forUpload/
+# Uploaded files
+Documents_upload/
+Pic_uploads/
+uploads/

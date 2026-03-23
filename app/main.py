@@ -45,8 +45,7 @@ app.include_router(login.router, prefix="/auth", tags=["Auth"])
 from app.controllers.auth import forgot_password
 app.include_router(forgot_password.router)
 
-from app.controllers.Crud import user_crud  
-app.include_router(user_crud.router)
+
 
 from app.controllers.auth import change_password
 app.include_router(change_password.router)
@@ -60,9 +59,7 @@ app.include_router(users.router)
 from app.controllers.auth import logout
 app.include_router(logout.router)
 
-from app.controllers.Crud.pic_uploads import router as upload_router
 
-app.include_router(upload_router)
 
 from app.controllers.auth.get_user import router as get_user_router
 
@@ -71,6 +68,15 @@ app.include_router(get_user_router)
 from app.controllers.user import userprofile
 
 app.include_router(userprofile.router)
+
+from app.controllers.user.userprofile import router as user_profile_router
+from app.controllers.user.updateprofile import router as update_profile_router
+from app.controllers.user.profilephotoupload import router as profile_photo_router
+
+app.include_router(user_profile_router)
+app.include_router(update_profile_router)
+app.include_router(profile_photo_router)
+
 
 # -----------------------------
 # Singleton flags

@@ -1,5 +1,5 @@
 # app/controllers/Crud/user_crud.py
-
+'''
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import date
@@ -157,3 +157,4 @@ def update_my_profile(
             user_response.profile_photo_url = file_obj.storage_uri
 
     return user_response
+    '''
