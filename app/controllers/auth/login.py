@@ -19,7 +19,6 @@ import hashlib
 import os
 import jwt
 import uuid
-import sqlalchemy as sa
 
 router = APIRouter()
 
@@ -164,7 +163,6 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
         device = create_or_update_user_device(db, user, data)
         session_obj = create_user_session(db, user, device)
 
-        # 🔥 ADD THIS
         user.last_login_at = now
         db.commit()
 
@@ -173,7 +171,7 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
         return LoginResponse(message="Login successful", token=token)
 
     # ---------------------------
-    # OTP LOGIN
+    # OTP LOGIN (✅ CLEAN VERSION)
     # ---------------------------
     if data.otp:
         otp_entry = None
@@ -195,18 +193,28 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
 
         if not otp_entry:
             raise HTTPException(status_code=400, detail="OTP not found")
+
+        # ✅ REUSE PROTECTION
+        if otp_entry.status != OtpStatus.ISSUED:
+            raise HTTPException(status_code=400, detail="OTP already used or invalid")
+
+        # ✅ EXPIRY CHECK
         if otp_entry.expires_at < now:
+            otp_entry.status = OtpStatus.EXPIRED
+            db.commit()
             raise HTTPException(status_code=400, detail="OTP expired")
+
+        # ✅ VERIFY OTP
         if otp_entry.otp_hash != hash_value(data.otp):
             raise HTTPException(status_code=400, detail="Invalid OTP")
 
+        # ✅ SUCCESS
         otp_entry.status = OtpStatus.VERIFIED
         db.commit()
 
         device = create_or_update_user_device(db, user, data)
         session_obj = create_user_session(db, user, device)
 
-        # 🔥 ADD THIS
         user.last_login_at = now
         db.commit()
 
