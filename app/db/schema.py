@@ -955,10 +955,13 @@ class FileObject(UUIDPKMixin, TimestampMixin, Base):
     storage_uri: Mapped[str] = mapped_column(Text, nullable=False)
     file_name: Mapped[Optional[str]] = mapped_column(String(255))
     mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
-    checksum_sha256: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    checksum_sha256: Mapped[str] = mapped_column(String(64), nullable=False, unique=False)
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
     purpose: Mapped[FilePurpose] = mapped_column(PGEnum(FilePurpose, name="file_purpose_enum"), nullable=False)
-    uploaded_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    uploaded_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    ForeignKey("users.id", ondelete="SET NULL", use_alter=True),
+    nullable=True
+    )
     metadata_json: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
     profile_picture_for_user: Mapped[Optional["User"]] = relationship(
     "User",

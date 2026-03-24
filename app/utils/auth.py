@@ -5,6 +5,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 import jwt
 import os
+import uuid
 
 from app.db.database import get_db
 from app.db.schema import User, UserStatus
@@ -48,7 +49,15 @@ def get_current_user(
                 detail="Invalid token"
             )
 
-    except jwt.PyJWTError:
+        # Convert to UUID (IMPORTANT FIX)
+        user_id = uuid.UUID(user_id)
+
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token expired"
+        )
+    except (jwt.PyJWTError, ValueError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token"
@@ -59,7 +68,7 @@ def get_current_user(
     # -------------------------
     user = db.query(User).filter(
         User.id == user_id,
-        User.status != UserStatus.DELETED   # 🔥 avoid deleted users
+        User.status != UserStatus.DELETED
     ).first()
 
     if not user:
@@ -69,8 +78,12 @@ def get_current_user(
         )
 
     # -------------------------
-    # 🔥 IMPORTANT: Refresh latest DB state
+    # Ensure user is ACTIVE (IMPORTANT FIX)
     # -------------------------
-    db.refresh(user)
+    if user.status not in [UserStatus.ACTIVE, UserStatus.PENDING]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User is not active"
+        )
 
     return user

@@ -1,5 +1,5 @@
 #app/controllers/kyc/admin_kyc.py
-from fastapi import APIRouter, Depends, HTTPException
+'''from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime
@@ -84,3 +84,4 @@ def review_kyc(
 
     db.commit()
     return {"message": "KYC reviewed successfully", "kyc_case_id": kyc_case.id}
+    '''

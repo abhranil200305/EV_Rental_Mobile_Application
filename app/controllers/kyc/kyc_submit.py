@@ -1,63 +1,114 @@
-#app/controllers/kyc/kyc_submit.py
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
+# app/controllers/kyc/kyc_submit.py
+
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
-import uuid
-from datetime import datetime
 
 from app.db.database import get_db
-from app.db.schema import User, KycCase, KycDocument, KycStatus
-from app.services.file_service import save_file
+from app.db.schema import KycCase, KycDocument, KycDocType, KycStatus
+from app.services.file_service import create_file_object
 from app.utils.auth import get_current_user
-from app.schemas.kyc_schemas import KycSubmitResponse
 
 router = APIRouter()
 
 
-@router.post("/kyc/submit", response_model=KycSubmitResponse)
-async def submit_kyc(
-    doc_types: List[str] = Form(...),
-    files: List[UploadFile] = File(...),
+@router.post("/kyc/upload-document")
+def upload_kyc_document(
+    doc_type: KycDocType,
+    file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    user=Depends(get_current_user)
 ):
-    """
-    Submit KYC documents for verification:
-    - doc_types: list of document types matching uploaded files
-    - files: list of uploaded documents (JPG, PNG, PDF)
-    """
+    # -----------------------------
+    # 0️⃣ Basic validation
+    # -----------------------------
+    if not file or not file.filename:
+        raise HTTPException(status_code=400, detail="Invalid file")
 
-    # Validation: number of files matches number of doc_types
-    if len(doc_types) != len(files):
-        raise HTTPException(status_code=400, detail="Mismatch in files and doc_types")
-
-    # Create a new KYC case
-    kyc_case = KycCase(
-        id=uuid.uuid4(),
-        user_id=current_user.id,
-        status=KycStatus.KYC_SUBMITTED,
-        submitted_at=datetime.utcnow()
+    # -----------------------------
+    # 1️⃣ Get latest KYC case
+    # -----------------------------
+    kyc_case = (
+        db.query(KycCase)
+        .filter(KycCase.user_id == user.id)
+        .order_by(KycCase.created_at.desc())
+        .first()
     )
-    db.add(kyc_case)
-    db.flush()  # ensures kyc_case.id is available
 
-    # Save each file and create KycDocument
-    for doc_type, file in zip(doc_types, files):
-        file_obj = save_file(file, db)  # calls local_storage or S3 based on config
+    # -----------------------------
+    # 2️⃣ Create new case if none exists
+    # -----------------------------
+    if not kyc_case:
+        kyc_case = KycCase(
+            user_id=user.id,
+            status=KycStatus.KYC_IN_PROGRESS
+        )
+        db.add(kyc_case)
+        db.commit()
+        db.refresh(kyc_case)
 
-        kyc_doc = KycDocument(
-            id=uuid.uuid4(),
+    # -----------------------------
+    # 3️⃣ Prevent upload if already approved
+    # -----------------------------
+    if kyc_case.status == KycStatus.KYC_APPROVED:
+        raise HTTPException(
+            status_code=400,
+            detail="KYC already approved. Cannot upload new documents."
+        )
+
+    # -----------------------------
+    # 4️⃣ Save file → file_objects
+    # -----------------------------
+    try:
+        file_obj = create_file_object(db, file, user.id)
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="File upload failed"
+        )
+
+    # -----------------------------
+    # 5️⃣ Create / replace KYC document
+    # -----------------------------
+    existing_doc = (
+        db.query(KycDocument)
+        .filter(
+            KycDocument.kyc_case_id == kyc_case.id,
+            KycDocument.doc_type == doc_type
+        )
+        .first()
+    )
+
+    if existing_doc:
+        existing_doc.file_id = file_obj.id
+        existing_doc.verified_bool = False  # reset verification
+    else:
+        new_doc = KycDocument(
             kyc_case_id=kyc_case.id,
             doc_type=doc_type,
             file_id=file_obj.id,
             verified_bool=False
         )
-        db.add(kyc_doc)
+        db.add(new_doc)
 
-    # Update user's KYC status
-    current_user.kyc_status = KycStatus.KYC_SUBMITTED
+    # -----------------------------
+    # 6️⃣ Update case status (important flow)
+    # -----------------------------
+    if kyc_case.status in [
+        KycStatus.KYC_REJECTED,
+        KycStatus.KYC_NEEDS_ACTION
+    ]:
+        kyc_case.status = KycStatus.KYC_IN_PROGRESS
 
-    # Commit all changes
+    # -----------------------------
+    # 7️⃣ Commit all changes
+    # -----------------------------
     db.commit()
 
-    return {"message": "KYC submitted successfully", "kyc_case_id": kyc_case.id}
+    # -----------------------------
+    # 8️⃣ Response
+    # -----------------------------
+    return {
+        "message": "Document uploaded successfully",
+        "kyc_case_id": str(kyc_case.id),
+        "file_id": str(file_obj.id)
+    }

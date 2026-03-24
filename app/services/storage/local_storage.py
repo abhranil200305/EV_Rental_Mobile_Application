@@ -1,27 +1,60 @@
-#app/services/storage/local_storage.py
+# app/services/storage/local_storage.py
+
 import os
 import uuid
-from fastapi import UploadFile
+from pathlib import Path
 from app.core.config import UPLOAD_DIR
 
-# Ensure the upload folder exists
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-
-def save_file_local(file: UploadFile):
+def save_file(file_bytes: bytes, filename: str) -> str:
     """
-    Save uploaded file to local Documents_upload folder.
-    Returns: (file_path, mime_type)
+    Save file locally and return file path.
+
+    Parameters:
+    - file_bytes: file content in bytes
+    - filename: original filename (used only for extension)
+
+    Returns:
+    - file_path (str): stored file path (Windows style)
     """
-    # Generate a unique filename
-    file_id = str(uuid.uuid4())
-    ext = file.filename.split(".")[-1].lower()
-    filename = f"{file_id}.{ext}"
 
-    file_path = os.path.join(UPLOAD_DIR, filename)
+    # -----------------------------
+    # 1️⃣ Ensure upload directory exists
+    # -----------------------------
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-    # Write file
+    # -----------------------------
+    # 2️⃣ Extract extension safely
+    # -----------------------------
+    ext = Path(filename).suffix.lower()
+    if not ext:
+        ext = ".bin"
+
+    # -----------------------------
+    # 3️⃣ Generate unique filename
+    # -----------------------------
+    unique_name = f"{uuid.uuid4()}{ext}"
+
+    # -----------------------------
+    # 4️⃣ Use direct folder (NO SHARDING)
+    # -----------------------------
+    final_dir = UPLOAD_DIR
+    os.makedirs(final_dir, exist_ok=True)
+
+    # -----------------------------
+    # 5️⃣ Full file path
+    # -----------------------------
+    file_path = os.path.join(final_dir, unique_name)
+
+    # -----------------------------
+    # 6️⃣ Write file
+    # -----------------------------
     with open(file_path, "wb") as f:
-        f.write(file.file.read())
+        f.write(file_bytes)
 
-    return file_path, file.content_type
+    # -----------------------------
+    # 7️⃣ Force Windows-style path
+    # -----------------------------
+    file_path = file_path.replace("/", "\\")
+
+    return file_path
