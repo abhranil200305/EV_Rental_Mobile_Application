@@ -7,6 +7,8 @@ from app.db.database import engine, Base
 import redis
 from celery import Celery
 from dotenv import load_dotenv
+from fastapi.middleware.cors import CORSMiddleware  # ✅ Import CORSMiddleware
+
 
 # -----------------------------
 # Load environment variables
@@ -80,6 +82,20 @@ app.include_router(profile_photo_router)
 from app.controllers.user.file_access import router as file_access_router
 
 app.include_router(file_access_router)
+
+from app.controllers.kyc.user_kyc_full import router as user_kyc_router
+# CORS middleware for testing in Bruno
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Register the user KYC blueprint
+app.include_router(user_kyc_router)
+
 # -----------------------------
 # Singleton flags
 # -----------------------------

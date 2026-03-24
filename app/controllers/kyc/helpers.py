@@ -2,12 +2,24 @@
 
 import os
 import uuid
-import hashlib
 from datetime import datetime
 from sqlalchemy.orm import Session
 from app.db.schema import KycCase, KycDocument, FileObject, KycDocType, FilePurpose
 
 UPLOAD_DIR = os.path.join(os.getcwd(), "uploads", "kyc_documents")
+
+
+# -----------------------------
+# Required KYC doc types
+# -----------------------------
+def required_doc_types_for_user():
+    # Example policy: driving license front/back + selfie required
+    return [
+        KycDocType.DRIVING_LICENSE_FRONT,
+        KycDocType.DRIVING_LICENSE_BACK,
+        KycDocType.SELFIE
+    ]
+
 
 # -----------------------------
 # Build user-facing KYC response
@@ -25,13 +37,13 @@ def build_kyc_response(db: Session, user, case: KycCase | None):
         }
 
     required_docs = required_doc_types_for_user()
-    uploaded_docs = [doc.doc_type for doc in case.kyc_documents]
+    uploaded_docs = [doc.doc_type for doc in case.documents]  # ✅ Access KycDocument correctly
 
     missing_docs = [d for d in required_docs if d not in uploaded_docs]
     can_submit = len(missing_docs) == 0
 
     docs_info = []
-    for doc in case.kyc_documents:
+    for doc in case.documents:  # ✅ Explicitly use KycDocument objects
         file_obj = db.query(FileObject).filter_by(id=doc.file_id).first()
         docs_info.append({
             "doc_type": doc.doc_type.value,
@@ -52,18 +64,6 @@ def build_kyc_response(db: Session, user, case: KycCase | None):
         "documents": docs_info,
         "next_action": next_action
     }
-
-
-# -----------------------------
-# Required KYC doc types
-# -----------------------------
-def required_doc_types_for_user():
-    # Example policy: driving license front/back + selfie required
-    return [
-        KycDocType.DRIVING_LICENSE_FRONT,
-        KycDocType.DRIVING_LICENSE_BACK,
-        KycDocType.SELFIE
-    ]
 
 
 # -----------------------------
@@ -104,18 +104,13 @@ def create_or_get_file_object(
 # Save file locally
 # -----------------------------
 def save_file(file_bytes: bytes, original_filename: str):
-    # Ensure upload folder exists
     os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-    # Generate unique server filename
     ext = os.path.splitext(original_filename)[1]
     server_filename = f"{uuid.uuid4().hex}{ext}"
     storage_path = os.path.join(UPLOAD_DIR, server_filename)
 
-    # Write file to disk
     with open(storage_path, "wb") as f:
         f.write(file_bytes)
 
-    # Return path + metadata placeholder
     metadata = {"original_file_name": original_filename, "uploaded_at": datetime.utcnow().isoformat()}
     return storage_path, metadata

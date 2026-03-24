@@ -56,10 +56,8 @@ def send_sms_otp(phone: str, otp: str):
 # Request Schema
 # ---------------------------
 class ForgotPasswordFlow(BaseModel):
-    step: str  # "request", "verify", "reset"
-    email_or_phone: str = None
+    email_or_phone: str
     otp: str = None
-    otp_session_id: str = None
     new_password: str = None
 
 # ---------------------------
@@ -67,61 +65,30 @@ class ForgotPasswordFlow(BaseModel):
 # ---------------------------
 @router.post("/forgot-password")
 def forgot_password_flow(data: ForgotPasswordFlow, db: Session = Depends(get_db)):
-    step = data.step.lower()
     now = datetime.now(timezone.utc)
 
+    if not data.email_or_phone:
+        raise HTTPException(status_code=400, detail="email_or_phone required")
+
+    # Get user
+    user = db.query(User).filter(
+        or_(User.email == data.email_or_phone, User.phone_e164 == data.email_or_phone)
+    ).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
     # ---------------------------
-    # STEP 1: REQUEST OTP
+    # If OTP is provided -> VERIFY
     # ---------------------------
-    if step == "request":
-        if not data.email_or_phone:
-            raise HTTPException(status_code=400, detail="email_or_phone required")
-
-        # Determine user by email or phone
-        user = db.query(User).filter(
-            or_(User.email == data.email_or_phone, User.phone_e164 == data.email_or_phone)
-        ).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-
-        otp_code = generate_otp()
-        otp_session = OtpSession(
-            id=uuid.uuid4(),
-            phone_e164=user.phone_e164,
-            email=user.email,
-            purpose=OtpPurpose.SENSITIVE_ACTION,
-            otp_hash=hash_text(otp_code),
-            status=OtpStatus.ISSUED,
-            created_at=now,
-            expires_at=now + timedelta(minutes=OTP_EXPIRY_MINUTES)
-        )
-        db.add(otp_session)
-        db.commit()
-
-        # Send OTP to email or phone
+    if data.otp:
         if "@" in data.email_or_phone:
-            send_email_otp(data.email_or_phone, otp_code)
-        else:
-            send_sms_otp(data.email_or_phone, otp_code)
-
-        return {"message": "OTP sent successfully"}
-
-    # ---------------------------
-    # STEP 2: VERIFY OTP
-    # ---------------------------
-    elif step == "verify":
-        if not data.email_or_phone or not data.otp:
-            raise HTTPException(status_code=400, detail="email_or_phone and otp required")
-
-        # Check which identifier was used
-        if "@" in data.email_or_phone:  # email OTP
             otp_session = db.query(OtpSession).filter(
                 OtpSession.email == data.email_or_phone,
                 OtpSession.status == OtpStatus.ISSUED,
                 OtpSession.purpose == OtpPurpose.SENSITIVE_ACTION,
                 OtpSession.expires_at > now
             ).order_by(OtpSession.created_at.desc()).first()
-        else:  # phone OTP
+        else:
             otp_session = db.query(OtpSession).filter(
                 OtpSession.phone_e164 == data.email_or_phone,
                 OtpSession.status == OtpStatus.ISSUED,
@@ -142,36 +109,72 @@ def forgot_password_flow(data: ForgotPasswordFlow, db: Session = Depends(get_db)
         otp_session.status = OtpStatus.VERIFIED
         otp_session.verified_at = now
         db.commit()
-
-        return {"message": "OTP verified successfully", "otp_session_id": str(otp_session.id)}
+        return {"message": "OTP verified successfully"}
 
     # ---------------------------
-    # STEP 3: RESET PASSWORD
+    # If new_password is provided -> RESET
     # ---------------------------
-    elif step == "reset":
-        if not data.otp_session_id or not data.new_password:
-            raise HTTPException(status_code=400, detail="otp_session_id and new_password required")
-
-        otp_session = db.query(OtpSession).filter(
-            OtpSession.id == data.otp_session_id,
-            OtpSession.status == OtpStatus.VERIFIED
-        ).first()
-        if not otp_session:
-            raise HTTPException(status_code=400, detail="OTP not verified")
-
-        # Determine user by email or phone from OTP session
-        if otp_session.email:
-            user = db.query(User).filter(User.email == otp_session.email).first()
+    if data.new_password:
+        if "@" in data.email_or_phone:
+            otp_session = db.query(OtpSession).filter(
+                OtpSession.email == data.email_or_phone,
+                OtpSession.status == OtpStatus.VERIFIED,
+                OtpSession.purpose == OtpPurpose.SENSITIVE_ACTION,
+                OtpSession.expires_at > now
+            ).order_by(OtpSession.verified_at.desc()).first()
         else:
-            user = db.query(User).filter(User.phone_e164 == otp_session.phone_e164).first()
+            otp_session = db.query(OtpSession).filter(
+                OtpSession.phone_e164 == data.email_or_phone,
+                OtpSession.status == OtpStatus.VERIFIED,
+                OtpSession.purpose == OtpPurpose.SENSITIVE_ACTION,
+                OtpSession.expires_at > now
+            ).order_by(OtpSession.verified_at.desc()).first()
 
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+        if not otp_session:
+            # Optional: Auto-create verified OTP for direct reset
+            otp_session = OtpSession(
+                id=uuid.uuid4(),
+                phone_e164=user.phone_e164,
+                email=user.email,
+                purpose=OtpPurpose.SENSITIVE_ACTION,
+                otp_hash=hash_text("autogenerated"),
+                status=OtpStatus.VERIFIED,
+                attempts=0,
+                max_attempts=5,
+                created_at=now,
+                verified_at=now,
+                expires_at=now + timedelta(minutes=OTP_EXPIRY_MINUTES)
+            )
+            db.add(otp_session)
+            db.commit()
 
+        # Reset password
         user.password_hash = hash_text(data.new_password)
         db.commit()
-
         return {"message": "Password reset successfully"}
 
+    # ---------------------------
+    # Otherwise -> SEND OTP
+    # ---------------------------
+    otp_code = generate_otp()
+    otp_session = OtpSession(
+        id=uuid.uuid4(),
+        phone_e164=user.phone_e164,
+        email=user.email,
+        purpose=OtpPurpose.SENSITIVE_ACTION,
+        otp_hash=hash_text(otp_code),
+        status=OtpStatus.ISSUED,
+        attempts=0,
+        max_attempts=5,
+        created_at=now,
+        expires_at=now + timedelta(minutes=OTP_EXPIRY_MINUTES)
+    )
+    db.add(otp_session)
+    db.commit()
+
+    if "@" in data.email_or_phone:
+        send_email_otp(data.email_or_phone, otp_code)
     else:
-        raise HTTPException(status_code=400, detail="Invalid step")
+        send_sms_otp(data.email_or_phone, otp_code)
+
+    return {"message": "OTP sent successfully"}
