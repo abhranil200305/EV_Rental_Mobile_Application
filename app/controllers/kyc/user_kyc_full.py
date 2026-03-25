@@ -85,8 +85,7 @@ def get_editable_case(user_id, db):
         .filter(KycCase.user_id == user_id)\
         .filter(KycCase.status.in_([
             KycStatus.KYC_IN_PROGRESS,
-            KycStatus.KYC_NEEDS_ACTION,
-            KycStatus.KYC_REJECTED
+            KycStatus.KYC_NEEDS_ACTION
         ]))\
         .order_by(KycCase.created_at.desc())\
         .first()
@@ -95,8 +94,7 @@ def get_editable_case(user_id, db):
 def ensure_editable(case):
     if case.status not in [
         KycStatus.KYC_IN_PROGRESS,
-        KycStatus.KYC_NEEDS_ACTION,
-        KycStatus.KYC_REJECTED
+        KycStatus.KYC_NEEDS_ACTION
     ]:
         raise HTTPException(400, f"Case not editable: {case.status}")
 
@@ -108,6 +106,12 @@ def check_kyc_processing_consent(db, user_id):
     ).first()
 
     return consent and consent.status == ConsentStatus.GRANTED
+
+
+# ✅ NEW HELPER (ONLY ADDITION)
+def block_if_suspended(user: User):
+    if user.kyc_status == KycStatus.KYC_SUSPENDED:
+        raise HTTPException(403, "KYC is suspended. Contact support.")
 
 
 # -----------------------------
@@ -141,10 +145,9 @@ def build_response(db: Session, case: Optional[KycCase]):
         file_obj = db.query(FileObject).filter_by(id=doc.file_id).first()
 
         docs.append({
-            "kyc_document_id": str(doc.id),  # ✅ FIXED
+            "kyc_document_id": str(doc.id),
             "doc_type": doc.doc_type.value,
             "verified_bool": doc.verified_bool,
-           # "storage_uri": file_obj.storage_uri if file_obj else None,
             "file_name": file_obj.file_name if file_obj else None,
             "expiry_date": doc.expiry_date.isoformat() if doc.expiry_date else None
         })
@@ -169,6 +172,7 @@ def build_response(db: Session, case: Optional[KycCase]):
         "next_action": next_action
     }
 
+
 # -----------------------------
 # 1️⃣ STATUS
 # -----------------------------
@@ -183,6 +187,8 @@ def get_cases(db: Session = Depends(get_db), user: User = Depends(get_current_us
 # -----------------------------
 @router.post("/cases")
 def start_case(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+
+    block_if_suspended(user)  # ✅ FIX
 
     latest = get_latest_case(user.id, db)
 
@@ -211,7 +217,7 @@ def start_case(db: Session = Depends(get_db), user: User = Depends(get_current_u
 
 
 # -----------------------------
-# 3️⃣ CONSENTS (FIXED)
+# 3️⃣ CONSENTS
 # -----------------------------
 class ConsentItem(BaseModel):
     consent_type: str
@@ -224,6 +230,8 @@ def consents(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user)
 ):
+    block_if_suspended(user)  # ✅ FIX
+
     now = datetime.now(timezone.utc)
 
     for c in consents:
@@ -277,9 +285,9 @@ def consents(
     db.refresh(case)
 
     return {
-            "message": "KYC consent accepted",
-            "initial_kyc_case_created": case.id
-        }
+        "message": "KYC consent accepted",
+        "initial_kyc_case_created": case.id
+    }
 
 
 # -----------------------------
@@ -299,6 +307,8 @@ async def upload_docs(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user)
 ):
+
+    block_if_suspended(user)  # ✅ FIX
 
     case = get_latest_case(user.id, db)
 
@@ -323,9 +333,13 @@ async def upload_docs(
         KycDocType.SELFIE: SELFIE
     }
 
+    any_uploaded = False
+
     for doc_type, file in files.items():
         if not file:
             continue
+
+        any_uploaded = True
 
         file_bytes = await file.read()
 
@@ -356,6 +370,8 @@ async def upload_docs(
 
         if existing_doc:
             existing_doc.file_id = file_obj.id
+            existing_doc.verified_bool = False
+            existing_doc.expiry_date = expiry
         else:
             db.add(KycDocument(
                 kyc_case_id=case.id,
@@ -365,7 +381,11 @@ async def upload_docs(
                 verified_bool=False
             ))
 
-    case.status = KycStatus.KYC_NEEDS_ACTION
+    if not any_uploaded:
+        raise HTTPException(400, "No files provided")
+
+    case.status = KycStatus.KYC_IN_PROGRESS
+
     db.commit()
 
     return build_response(db, case)
@@ -376,6 +396,8 @@ async def upload_docs(
 # -----------------------------
 @router.post("/submit")
 def submit(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+
+    block_if_suspended(user)  # ✅ FIX
 
     case = get_editable_case(user.id, db)
     if not case:

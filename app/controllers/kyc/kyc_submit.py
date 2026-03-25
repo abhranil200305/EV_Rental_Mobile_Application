@@ -1,5 +1,5 @@
 # app/controllers/kyc/kyc_submit.py
-
+'''
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -112,3 +112,4 @@ def upload_kyc_document(
         "kyc_case_id": str(kyc_case.id),
         "file_id": str(file_obj.id)
     }
+'''
