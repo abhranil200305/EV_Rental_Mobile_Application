@@ -90,6 +90,9 @@ from app.controllers.admin import signup as admin_signup, login as admin_login
 app.include_router(admin_signup.router, prefix="/admin/auth", tags=["Admin Auth"])
 app.include_router(admin_login.router, prefix="/admin/auth", tags=["Admin Auth"])
 
+from app.controllers.kyc.file_access import router as kyc_file_router
+app.include_router(kyc_file_router)
+
 from app.controllers.kyc.user_kyc_full import router as user_kyc_router
 # CORS middleware for testing in Bruno
 app.add_middleware(

@@ -55,7 +55,6 @@ def create_or_get_file_object(db: Session, **kwargs):
     return obj
 
 
-# ✅ FIXED REQUIRED DOCS
 def required_doc_types():
     return [
         KycDocType.DRIVING_LICENSE_FRONT,
@@ -67,7 +66,6 @@ def required_doc_types():
     ]
 
 
-# ✅ OPTIONAL DOCS
 def optional_doc_types():
     return [
         KycDocType.PASSPORT,
@@ -103,11 +101,13 @@ def ensure_editable(case):
         raise HTTPException(400, f"Case not editable: {case.status}")
 
 
-def check_all_consents_granted(db, user_id):
-    consents = db.query(UserConsent).filter_by(user_id=user_id).all()
-    if not consents:
-        return False
-    return all(c.status == ConsentStatus.GRANTED for c in consents)
+def check_kyc_processing_consent(db, user_id):
+    consent = db.query(UserConsent).filter_by(
+        user_id=user_id,
+        consent_type=ConsentType.KYC_PROCESSING
+    ).first()
+
+    return consent and consent.status == ConsentStatus.GRANTED
 
 
 # -----------------------------
@@ -141,10 +141,10 @@ def build_response(db: Session, case: Optional[KycCase]):
         file_obj = db.query(FileObject).filter_by(id=doc.file_id).first()
 
         docs.append({
+            "kyc_document_id": str(doc.id),  # ✅ FIXED
             "doc_type": doc.doc_type.value,
-            "file_id": str(doc.file_id),
             "verified_bool": doc.verified_bool,
-            "storage_uri": file_obj.storage_uri if file_obj else None,
+           # "storage_uri": file_obj.storage_uri if file_obj else None,
             "file_name": file_obj.file_name if file_obj else None,
             "expiry_date": doc.expiry_date.isoformat() if doc.expiry_date else None
         })
@@ -169,7 +169,6 @@ def build_response(db: Session, case: Optional[KycCase]):
         "next_action": next_action
     }
 
-
 # -----------------------------
 # 1️⃣ STATUS
 # -----------------------------
@@ -188,7 +187,6 @@ def start_case(db: Session = Depends(get_db), user: User = Depends(get_current_u
     latest = get_latest_case(user.id, db)
 
     if latest and latest.status == KycStatus.KYC_SUBMITTED:
-        #raise HTTPException(400, "KYC already submitted")
         return build_response(db, latest)
 
     existing = get_editable_case(user.id, db)
@@ -213,7 +211,7 @@ def start_case(db: Session = Depends(get_db), user: User = Depends(get_current_u
 
 
 # -----------------------------
-# 3️⃣ CONSENTS
+# 3️⃣ CONSENTS (FIXED)
 # -----------------------------
 class ConsentItem(BaseModel):
     consent_type: str
@@ -221,18 +219,25 @@ class ConsentItem(BaseModel):
 
 
 @router.post("/consents")
-def consents(consents: List[ConsentItem],
-             db: Session = Depends(get_db),
-             user: User = Depends(get_current_user)):
-
+def consents(
+    consents: List[ConsentItem],
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
     now = datetime.now(timezone.utc)
 
     for c in consents:
-        status_enum = ConsentStatus.GRANTED if c.status == "Agree" else ConsentStatus.WITHDRAWN
+        if c.consent_type != "KYC_PROCESSING":
+            raise HTTPException(400, "Only KYC_PROCESSING consent is allowed")
+
+        status_enum = (
+            ConsentStatus.GRANTED if c.status == "Agree"
+            else ConsentStatus.WITHDRAWN
+        )
 
         db.merge(UserConsent(
             user_id=user.id,
-            consent_type=ConsentType(c.consent_type),
+            consent_type=ConsentType.KYC_PROCESSING,
             status=status_enum,
             granted_at=now if status_enum == ConsentStatus.GRANTED else None,
             withdrawn_at=now if status_enum == ConsentStatus.WITHDRAWN else None,
@@ -241,11 +246,44 @@ def consents(consents: List[ConsentItem],
         ))
 
     db.commit()
-    return {"message": "Consents updated"}
+
+    if not check_kyc_processing_consent(db, user.id):
+        return {"message": "KYC consent not accepted"}
+
+    latest = get_latest_case(user.id, db)
+
+    if latest and latest.status == KycStatus.KYC_SUBMITTED:
+        return build_response(db, latest)
+
+    existing = get_editable_case(user.id, db)
+    if existing:
+        return {
+            "message": "Updated consent",
+            "existing_kyc_case": existing.id
+        }
+
+    case = KycCase(
+        user_id=user.id,
+        status=KycStatus.KYC_IN_PROGRESS,
+        source="user_app"
+    )
+
+    db.add(case)
+
+    if user.kyc_status == KycStatus.KYC_NOT_STARTED:
+        user.kyc_status = KycStatus.KYC_IN_PROGRESS
+
+    db.commit()
+    db.refresh(case)
+
+    return {
+            "message": "KYC consent accepted",
+            "initial_kyc_case_created": case.id
+        }
 
 
 # -----------------------------
-# 4️⃣ UPLOAD DOCUMENTS ✅ (FIXED)
+# 4️⃣ UPLOAD DOCUMENTS
 # -----------------------------
 @router.patch("/documents/upload")
 async def upload_docs(
@@ -267,8 +305,8 @@ async def upload_docs(
     if case and case.status == KycStatus.KYC_SUBMITTED:
         raise HTTPException(400, "Cannot upload after submission")
 
-    if not check_all_consents_granted(db, user.id):
-        raise HTTPException(400, "Please accept consents first")
+    if not check_kyc_processing_consent(db, user.id):
+        raise HTTPException(400, "Please accept KYC consent first")
 
     case = get_editable_case(user.id, db)
     if not case:
@@ -350,8 +388,8 @@ def submit(db: Session = Depends(get_db), user: User = Depends(get_current_user)
     if missing:
         raise HTTPException(400, f"Missing documents: {[m.value for m in missing]}")
 
-    if not check_all_consents_granted(db, user.id):
-        raise HTTPException(400, "Consents not completed")
+    if not check_kyc_processing_consent(db, user.id):
+        raise HTTPException(400, "KYC consent not completed")
 
     case.status = KycStatus.KYC_SUBMITTED
     case.submitted_at = datetime.now(timezone.utc)
