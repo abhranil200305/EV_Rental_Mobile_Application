@@ -82,6 +82,13 @@ app.include_router(profile_photo_router)
 from app.controllers.user.file_access import router as file_access_router
 
 app.include_router(file_access_router)
+# -------------------------
+# ADMIN / AUTH ROUTES
+# -------------------------
+from app.controllers.admin import signup as admin_signup, login as admin_login
+
+app.include_router(admin_signup.router, prefix="/admin/auth", tags=["Admin Auth"])
+app.include_router(admin_login.router, prefix="/admin/auth", tags=["Admin Auth"])
 
 from app.controllers.kyc.user_kyc_full import router as user_kyc_router
 # CORS middleware for testing in Bruno

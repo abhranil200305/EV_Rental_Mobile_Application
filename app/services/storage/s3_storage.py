@@ -1,5 +1,5 @@
 # app/services/storage/s3_storage.py
-
+'''
 import boto3
 import uuid
 from botocore.exceptions import BotoCoreError, ClientError
@@ -68,3 +68,4 @@ def save_file_s3(file_bytes: bytes, filename: str) -> str:
     file_url = f"https://{S3_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com/{s3_key}"
 
     return file_url
+    '''
