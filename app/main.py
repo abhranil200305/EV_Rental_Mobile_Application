@@ -108,6 +108,9 @@ from app.controllers.vehicle import routers as vehicle_routers
 
 for router in vehicle_routers:
     app.include_router(router)
+    from app.controllers.vehicle.blackout import router as blackout_router
+
+app.include_router(blackout_router, tags=["Vehicle Blackout"])
 
 # Register the user KYC blueprint
 app.include_router(user_kyc_router)

@@ -1,9 +1,9 @@
-# app/schemas/vehicle_schemas.py
-
+#app/schemas/vehicle_schema.py
 from pydantic import BaseModel
 from typing import Optional
 from uuid import UUID
 from decimal import Decimal
+from datetime import datetime
 
 from app.db.schema import (
     TransmissionType,
@@ -73,7 +73,16 @@ class VehicleUpdateRequest(BaseModel):
 
 
 # -----------------------------
-# RESPONSE (FULL FIX)
+# BLACKOUT CREATE (🔥 ADDED)
+# -----------------------------
+class CreateBlackoutRequest(BaseModel):
+    start_ts: datetime
+    end_ts: datetime
+    reason: str
+
+
+# -----------------------------
+# RESPONSE
 # -----------------------------
 class VehicleResponse(BaseModel):
     id: UUID
@@ -107,4 +116,4 @@ class VehicleResponse(BaseModel):
     is_deleted: bool
 
     class Config:
-        from_attributes = True   # REQUIRED for SQLAlchemy → Pydantic
+        from_attributes = True
