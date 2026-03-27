@@ -73,7 +73,7 @@ class VehicleUpdateRequest(BaseModel):
 
 
 # -----------------------------
-# BLACKOUT CREATE (🔥 ADDED)
+# BLACKOUT CREATE ()
 # -----------------------------
 class CreateBlackoutRequest(BaseModel):
     start_ts: datetime
