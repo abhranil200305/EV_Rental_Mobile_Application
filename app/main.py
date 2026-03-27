@@ -103,6 +103,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+#----vehicle-------#
+from app.controllers.vehicle import routers as vehicle_routers
+
+for router in vehicle_routers:
+    app.include_router(router)
+
 # Register the user KYC blueprint
 app.include_router(user_kyc_router)
 
