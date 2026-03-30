@@ -8,12 +8,33 @@ import redis
 from celery import Celery
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware  # ✅ Import CORSMiddleware
+# app/main.py
 
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# ✅ LOAD ENV FIRST (TOP PRIORITY)
+BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
+
+# -----------------------------
+# Now import everything else
+# -----------------------------
+import logging
+from fastapi import FastAPI
+from sqlalchemy.exc import OperationalError
+from app.db.database import engine, Base
+import redis
+from celery import Celery
+from fastapi.middleware.cors import CORSMiddleware
 
 # -----------------------------
 # Load environment variables
 # -----------------------------
-load_dotenv()
+
+#load_dotenv()
+
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
@@ -89,6 +110,12 @@ from app.controllers.admin import signup as admin_signup, login as admin_login
 
 app.include_router(admin_signup.router, prefix="/admin/auth", tags=["Admin Auth"])
 app.include_router(admin_login.router, prefix="/admin/auth", tags=["Admin Auth"])
+from app.controllers.admin.change_password import router as admin_change_password_router
+
+app.include_router(admin_change_password_router)
+from app.controllers.admin.forgot_password import router as admin_forgot_password_router
+
+app.include_router(admin_forgot_password_router)
 
 from app.controllers.kyc.file_access import router as kyc_file_router
 app.include_router(kyc_file_router)
@@ -108,12 +135,14 @@ from app.controllers.vehicle import routers as vehicle_routers
 
 for router in vehicle_routers:
     app.include_router(router)
-    from app.controllers.vehicle.blackout import router as blackout_router
+from app.controllers.vehicle.blackout import router as blackout_router
 
 app.include_router(blackout_router, tags=["Vehicle Blackout"])
 
 # Register the user KYC blueprint
 app.include_router(user_kyc_router)
+from app.controllers.wallet.wallet_controller import router as wallet_router
+app.include_router(wallet_router)
 
 # -----------------------------
 # Singleton flags

@@ -41,7 +41,7 @@ def get_current_user(
     try:
         # Decode JWT token
         payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
-        user_id = payload.get("sub")
+        user_id = payload.get("user_id") or payload.get("sub")
 
         if not user_id:
             raise HTTPException(

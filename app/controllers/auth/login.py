@@ -64,7 +64,7 @@ def create_jwt_token(user: User, session: UserSession) -> str:
     now = datetime.now(timezone.utc)
 
     payload = {
-        "sub": user_id,
+        "user_id": user_id,
         "user_type": user.user_type.value,
         "jti": str(session.id),
         "iat": int(now.timestamp()),
